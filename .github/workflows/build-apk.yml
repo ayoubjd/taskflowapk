@@ -17,27 +17,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ── 2. Set up Java (required by Android Gradle) ───────────────────
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: gradle
-
-      # ── 3. Set up Node.js ─────────────────────────────────────────────
+      # ── 2. Set up Node.js ─────────────────────────────────────────────
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
-      # ── 4. Install npm dependencies (Capacitor CLI + packages) ────────
+      # ── 3. Install npm dependencies (Capacitor CLI + packages) ────────
       - name: Install dependencies
         run: npm install
 
-      # ── 5. Add Android platform ───────────────────────────────────────
-      #    Only runs if the android/ folder doesn't already exist
+      # ── 4. Add Android platform ───────────────────────────────────────
+      #    Must happen BEFORE Java setup so Gradle files exist for caching
       - name: Add Android platform
         run: |
           if [ ! -d "android" ]; then
@@ -46,9 +38,18 @@ jobs:
             echo "Android platform already added, skipping."
           fi
 
-      # ── 6. Sync web assets into Android project ───────────────────────
+      # ── 5. Sync web assets into Android project ───────────────────────
       - name: Sync Capacitor
         run: npx cap sync android
+
+      # ── 6. Set up JDK 17 (after android/ exists — no cache: gradle) ───
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          # NOTE: "cache: gradle" removed — it fails when android/ doesn't
+          # exist at checkout time. Gradle downloads are fast enough without it.
 
       # ── 7. Set up Android SDK ─────────────────────────────────────────
       - name: Set up Android SDK
@@ -66,6 +67,8 @@ jobs:
       - name: Build Debug APK
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon --stacktrace
+        env:
+          ANDROID_HOME: /usr/local/lib/android/sdk
 
       # ── 11. Upload APK as artifact ────────────────────────────────────
       - name: Upload APK artifact
