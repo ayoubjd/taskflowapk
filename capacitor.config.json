@@ -1,0 +1,19 @@
+{
+  "appId": "com.taskflow.app",
+  "appName": "TaskFlow",
+  "webDir": "src",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true,
+    "backgroundColor": "#f8fafc"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1500,
+      "backgroundColor": "#4f46e5",
+      "showSpinner": false
+    }
+  }
+}

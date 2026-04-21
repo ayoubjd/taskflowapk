@@ -1,0 +1,1617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaskFlow - Priority & Time Block</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        :root {
+            --bg-page: #f8fafc;
+            --bg-card: #ffffff;
+            --bg-nav: #ffffff;
+            --bg-input: #ffffff;
+            --bg-secondary: #f1f5f9;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border-color: #e2e8f0;
+            --accent-color: #4f46e5;
+            --timeline-grid: #e2e8f0;
+            --task-text: #000000;
+            --hour-width: 100px;
+        }
+
+        .dark {
+            --bg-page: #0f172a;
+            --bg-card: #1e293b;
+            --bg-nav: #0f172a;
+            --bg-input: #1e293b;
+            --bg-secondary: #1e293b;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --border-color: #334155;
+            --accent-color: #6366f1;
+            --timeline-grid: #1e293b;
+            --task-text: #ffffff;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-page);
+            color: var(--text-primary);
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        /* Override Tailwind with variables where necessary */
+        .bg-card { background-color: var(--bg-card); }
+        .bg-page { background-color: var(--bg-page); }
+        .bg-nav { background-color: var(--bg-nav); }
+        .text-primary { color: var(--text-primary); }
+        .text-secondary { color: var(--text-secondary); }
+        .border-base { border-color: var(--border-color); }
+
+        .unscheduled-container {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            padding: 6px 12px;
+            background-color: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            align-items: center;
+        }
+
+        .unscheduled-chip {
+            flex: 0 0 auto;
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            padding: 4px 10px;
+            border-radius: 8px;
+            cursor: grab;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-primary);
+            font-size: 0.75rem;
+            font-weight: 600;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            transition: all 0.2s;
+            touch-action: none; /* CRITICAL for mobile dragging */
+        }
+        .unscheduled-chip:hover {
+            border-color: var(--accent-color);
+        }
+
+        .timeline-container::-webkit-scrollbar { height: 6px; }
+        .timeline-container::-webkit-scrollbar-track { background: transparent; }
+        .timeline-container::-webkit-scrollbar-thumb { 
+            background: var(--border-color); 
+            border-radius: 10px; 
+        }
+
+        .task-block {
+            cursor: move;
+            user-select: none;
+            transition: box-shadow 0.2s;
+            touch-action: none;
+        }
+        .task-block:active { box-shadow: 0 8px 15px -3px rgb(0 0 0 / 0.2); }
+
+        .priority-card {
+            touch-action: none;
+            user-select: none;
+        }
+
+        .resize-handle {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 8px;
+            cursor: ew-resize;
+            background: rgba(0,0,0,0.1);
+            border-radius: 0 12px 12px 0;
+            touch-action: none;
+        }
+
+        .view-btn-active {
+            background-color: var(--bg-card) !important;
+            color: var(--accent-color) !important;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        /* ── Habit Cards ── */
+        .habit-card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            transition: all 0.2s;
+            overflow: hidden;
+        }
+        .habit-card:hover {
+            border-color: var(--accent-color);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+
+        /* Ring progress SVG */
+        .habit-ring-bg   { fill: none; stroke: var(--border-color); stroke-width: 5; }
+        .habit-ring-fill { fill: none; stroke-width: 5; stroke-linecap: round;
+                           transform: rotate(-90deg); transform-origin: center;
+                           transition: stroke-dashoffset 0.6s cubic-bezier(.4,0,.2,1); }
+
+        /* Big log button */
+        .habit-log-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 16px;
+            font-weight: 900;
+            font-size: 1.5rem;
+            color: #fff;
+            cursor: pointer;
+            transition: transform 0.12s, box-shadow 0.12s;
+            touch-action: manipulation;
+            user-select: none;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+            width: 60px;
+            height: 60px;
+            flex-shrink: 0;
+        }
+        .habit-log-btn:active { transform: scale(0.88); box-shadow: 0 1px 6px rgba(0,0,0,0.18); }
+        .habit-log-btn.done  { filter: brightness(1.08); }
+
+        /* Week dots row */
+        .week-dot {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            font-weight: 800;
+            transition: all 0.2s;
+        }
+        .week-dot.today-dot { outline: 2px solid var(--accent-color); outline-offset: 2px; }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Dark Mode Toggle Icons */
+        #sun-icon { display: none; }
+        .dark #sun-icon { display: block; }
+        .dark #moon-icon { display: none; }
+
+        /* Recurring day picker active state */
+        .day-btn.active {
+            background-color: var(--accent-color) !important;
+            color: #fff !important;
+            border-color: var(--accent-color) !important;
+        }
+
+        /* Subtask progress bar */
+        .subtask-progress-bar {
+            height: 3px;
+            border-radius: 99px;
+            background: var(--border-color);
+            overflow: hidden;
+            margin-top: 6px;
+        }
+        .subtask-progress-fill {
+            height: 100%;
+            border-radius: 99px;
+            background: var(--accent-color);
+            transition: width 0.3s ease;
+        }
+
+        /* Recurring badge on task card */
+        .recur-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            font-size: 9px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--accent-color);
+            border-radius: 6px;
+            padding: 1px 5px;
+            background: rgba(99,102,241,0.12);
+        }
+
+        /* Fix: Modal inputs text visibility in dark mode */
+        .dark #task-modal input,
+        .dark #task-modal select,
+        .dark #task-modal textarea,
+        .dark #habit-modal input,
+        .dark #habit-modal select,
+        .dark #habit-modal textarea,
+        .dark #subtask-modal input {
+            color: var(--text-primary) !important;
+            background-color: var(--bg-secondary) !important;
+            color-scheme: dark;
+        }
+        .dark #task-modal input::placeholder,
+        .dark #habit-modal input::placeholder,
+        .dark #subtask-modal input::placeholder {
+            color: var(--text-secondary) !important;
+            opacity: 1;
+        }
+        .dark #task-modal select option,
+        .dark #habit-modal select option {
+            background-color: var(--bg-card);
+            color: var(--text-primary);
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+
+    <!-- Desktop Top Bar -->
+    <header class="hidden md:flex bg-nav border-b border-base px-8 py-2.5 items-center justify-between sticky top-0 z-40 transition-colors">
+        <div class="flex items-center gap-3">
+            <div class="bg-indigo-600 p-1.5 rounded-xl text-white">
+                <i data-lucide="zap" class="w-5 h-5"></i>
+            </div>
+            <h1 class="text-xl font-extrabold tracking-tight bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">TaskFlow</h1>
+        </div>
+        
+        <nav class="flex bg-secondary p-1 rounded-xl border border-base">
+            <button id="view-priority-desktop" onclick="switchView('priority')" class="px-5 py-1.5 rounded-lg text-xs lg:text-sm font-semibold transition-all text-secondary">
+                Priority
+            </button>
+            <button id="view-timeline-desktop" onclick="switchView('timeline')" class="px-5 py-1.5 rounded-lg text-xs lg:text-sm font-semibold transition-all text-secondary">
+                Time Block
+            </button>
+            <button id="view-habits-desktop" onclick="switchView('habits')" class="px-5 py-1.5 rounded-lg text-xs lg:text-sm font-semibold transition-all text-secondary">
+                Habits
+            </button>
+        </nav>
+
+        <div class="flex items-center gap-4">
+            <button onclick="exportData()" class="p-2 rounded-xl bg-secondary text-primary hover:opacity-80 transition-opacity" title="Export Data">
+                <i data-lucide="download" class="w-5 h-5"></i>
+            </button>
+            <button onclick="toggleDarkMode()" class="p-2 rounded-xl bg-secondary text-primary hover:opacity-80 transition-opacity">
+                <i data-lucide="sun" id="sun-icon" class="w-5 h-5"></i>
+                <i data-lucide="moon" id="moon-icon" class="w-5 h-5"></i>
+            </button>
+            <button onclick="openModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all active:scale-95 shadow-sm">
+                <i data-lucide="plus" class="w-4 h-4"></i>
+                New Task
+            </button>
+        </div>
+    </header>
+
+    <!-- Mobile Top Bar -->
+    <header class="md:hidden bg-nav border-b border-base px-4 py-2 flex items-center justify-between sticky top-0 z-40 transition-colors">
+        <div class="flex items-center gap-2">
+            <div class="bg-indigo-600 p-1 rounded-lg text-white">
+                <i data-lucide="zap" class="w-4 h-4"></i>
+            </div>
+            <h1 class="text-base font-bold text-primary">TaskFlow</h1>
+        </div>
+        <div class="flex items-center gap-2">
+            <button onclick="exportData()" class="p-1.5 rounded-lg bg-secondary text-primary">
+                <i data-lucide="download" class="w-4 h-4"></i>
+            </button>
+            <button onclick="toggleDarkMode()" class="p-1.5 rounded-lg bg-secondary text-primary">
+                <i data-lucide="sun" id="sun-icon-mobile" class="w-4 h-4 hidden dark:block"></i>
+                <i data-lucide="moon" id="moon-icon-mobile" class="w-4 h-4 dark:hidden"></i>
+            </button>
+            <button onclick="openModal()" class="bg-indigo-600 text-white p-1.5 rounded-lg active:scale-90">
+                <i data-lucide="plus" class="w-4 h-4"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 overflow-y-auto p-4 md:p-6 pb-24 md:pb-6">
+        
+        <!-- Priority View -->
+        <div id="priority-view" class="grid grid-cols-1 md:grid-cols-3 gap-6 md:h-full">
+            <!-- Must do today -->
+            <div class="flex flex-col gap-3 min-h-0">
+                <div class="flex items-center justify-between px-1">
+                    <h2 class="text-sm font-bold text-primary flex items-center gap-2 uppercase tracking-wider">
+                        <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+                        Must do today
+                    </h2>
+                    <span id="count-p1" class="text-[10px] font-bold text-secondary bg-secondary px-2 py-0.5 rounded-full">0</span>
+                </div>
+                <div class="flex-1 min-h-0 overflow-y-auto rounded-2xl bg-secondary/30 border-2 border-dashed border-base transition-colors" style="max-height: 45vh;">
+                    <div id="list-p1" class="space-y-3 p-3 min-h-[150px]"></div>
+                </div>
+            </div>
+
+            <!-- Need to be done -->
+            <div class="flex flex-col gap-3 min-h-0">
+                <div class="flex items-center justify-between px-1">
+                    <h2 class="text-sm font-bold text-primary flex items-center gap-2 uppercase tracking-wider">
+                        <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                        Need to do
+                    </h2>
+                    <span id="count-p2" class="text-[10px] font-bold text-secondary bg-secondary px-2 py-0.5 rounded-full">0</span>
+                </div>
+                <div class="flex-1 min-h-0 overflow-y-auto rounded-2xl bg-secondary/30 border-2 border-dashed border-base transition-colors" style="max-height: 45vh;">
+                    <div id="list-p2" class="space-y-3 p-3 min-h-[150px]"></div>
+                </div>
+            </div>
+
+            <!-- Want to do -->
+            <div class="flex flex-col gap-3 min-h-0">
+                <div class="flex items-center justify-between px-1">
+                    <h2 class="text-sm font-bold text-primary flex items-center gap-2 uppercase tracking-wider">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        Want to do
+                    </h2>
+                    <span id="count-p3" class="text-[10px] font-bold text-secondary bg-secondary px-2 py-0.5 rounded-full">0</span>
+                </div>
+                <div class="flex-1 min-h-0 overflow-y-auto rounded-2xl bg-secondary/30 border-2 border-dashed border-base transition-colors" style="max-height: 45vh;">
+                    <div id="list-p3" class="space-y-3 p-3 min-h-[150px]"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Time Block View -->
+        <div id="timeline-view" class="hidden h-full flex flex-col">
+            <div class="bg-card rounded-2xl border border-base overflow-hidden flex flex-col flex-1 shadow-sm">
+                <!-- Compact Header -->
+                <div class="px-3 py-1 border-b border-base flex justify-between items-center bg-card">
+                    <div class="flex items-center gap-2">
+                        <span class="text-[9px] font-black uppercase text-secondary">Time Block</span>
+                        <button onclick="fitTimelineToScreen()" class="text-[8px] font-bold bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-1 py-0.5 rounded uppercase">Fit</button>
+                    </div>
+                    <div class="flex items-center gap-1.5 bg-secondary/50 px-1.5 py-0.5 rounded-lg border border-base">
+                        <i data-lucide="zoom-out" class="w-2.5 h-2.5 text-secondary cursor-pointer" onclick="changeZoom(-20)"></i>
+                        <input type="range" id="zoom-slider" min="20" max="300" value="100" class="w-12 sm:w-20 h-1 accent-indigo-600" oninput="handleZoom(this.value)">
+                        <i data-lucide="zoom-in" class="w-2.5 h-2.5 text-secondary cursor-pointer" onclick="changeZoom(20)"></i>
+                    </div>
+                </div>
+
+                <!-- Unscheduled Section -->
+                <div id="unscheduled-area" class="unscheduled-container no-scrollbar border-b border-base" style="display: none;"></div>
+                
+                <!-- Grid Container -->
+                <div class="timeline-container relative flex-1 overflow-x-auto overflow-y-auto p-4 pt-6">
+                    <div id="timeline-grid" class="relative min-h-[140px]">
+                        <div id="hour-markers" class="absolute inset-0 flex h-full"></div>
+                        <div id="timeline-tasks" class="relative h-20 mt-8 pointer-events-auto"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Habits View -->
+        <div id="habits-view" class="hidden h-full flex flex-col max-w-2xl mx-auto w-full">
+            <!-- Header -->
+            <div class="flex justify-between items-center mb-4 px-1">
+                <div>
+                    <h2 class="text-xl font-extrabold text-primary">Daily Habits</h2>
+                    <p id="habits-summary" class="text-xs text-secondary mt-0.5"></p>
+                </div>
+                <button onclick="openHabitModal()" class="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 text-white shadow-md hover:bg-indigo-700 active:scale-95 transition-all text-sm font-bold">
+                    <i data-lucide="plus" class="w-4 h-4"></i> New
+                </button>
+            </div>
+
+            <!-- Habit list -->
+            <div id="habits-list" class="flex flex-col gap-3">
+                <!-- Habit cards injected here -->
+            </div>
+            <div id="habits-empty-state" class="hidden flex-col items-center justify-center p-16 text-center opacity-40">
+                <i data-lucide="activity" class="w-16 h-16 mb-4"></i>
+                <p class="text-lg font-bold">Start tracking your habits!</p>
+                <p class="text-sm mt-1">Tap New to add your first habit.</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Mobile Bottom Navigation -->
+    <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-nav border-t border-base px-4 py-2 flex justify-around items-center z-40 shadow-lg">
+        <button onclick="switchView('priority')" id="view-priority-mobile" class="flex flex-col items-center gap-0.5 text-secondary">
+            <i data-lucide="layers" class="w-5 h-5"></i>
+            <span class="text-[10px] font-bold">Priority</span>
+        </button>
+        <button onclick="switchView('timeline')" id="view-timeline-mobile" class="flex flex-col items-center gap-0.5 text-secondary">
+            <i data-lucide="clock" class="w-5 h-5"></i>
+            <span class="text-[10px] font-bold">Time Block</span>
+        </button>
+        <button onclick="switchView('habits')" id="view-habits-mobile" class="flex flex-col items-center gap-0.5 text-secondary">
+            <i data-lucide="activity" class="w-5 h-5"></i>
+            <span class="text-[10px] font-bold">Habits</span>
+        </button>
+    </nav>
+
+    <!-- Task Modal -->
+    <div id="task-modal" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-50 p-4 backdrop-blur-sm">
+        <div class="bg-card rounded-2xl w-full max-w-sm shadow-2xl border border-base flex flex-col" style="max-height:90vh;">
+            <div class="flex justify-between items-center p-6 pb-4 border-b border-base flex-shrink-0">
+                <h3 id="modal-title" class="text-lg font-bold text-primary">New Task</h3>
+                <button onclick="closeModal()" class="text-secondary hover:text-primary transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="overflow-y-auto flex-1 p-6 pt-4">
+            <form id="task-form" onsubmit="handleTaskSubmit(event)" class="space-y-4">
+                <input type="hidden" id="task-id">
+                <div>
+                    <label class="block text-xs font-bold text-secondary uppercase mb-1">Title</label>
+                    <input type="text" id="task-title" required class="w-full px-4 py-2 rounded-xl border border-base bg-secondary text-primary focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Task name...">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-secondary uppercase mb-1">Priority</label>
+                    <select id="task-priority" class="w-full px-4 py-2 rounded-xl border border-base bg-secondary text-primary focus:ring-2 focus:ring-indigo-500 outline-none appearance-none">
+                        <option value="1">Must do today</option>
+                        <option value="2">Need to do</option>
+                        <option value="3">Want to do</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-secondary uppercase mb-1">Start</label>
+                        <input type="time" id="task-start" class="w-full px-3 py-2 rounded-xl border border-base bg-secondary text-primary focus:ring-2 focus:ring-indigo-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-secondary uppercase mb-1">End</label>
+                        <input type="time" id="task-end" class="w-full px-3 py-2 rounded-xl border border-base bg-secondary text-primary focus:ring-2 focus:ring-indigo-500 outline-none">
+                    </div>
+                </div>
+
+                <!-- Recurring -->
+                <div>
+                    <label class="block text-xs font-bold text-secondary uppercase mb-1">Repeat</label>
+                    <select id="task-recurrence" onchange="toggleRecurrenceDays()" class="w-full px-4 py-2 rounded-xl border border-base bg-secondary text-primary focus:ring-2 focus:ring-indigo-500 outline-none appearance-none">
+                        <option value="none">Does not repeat</option>
+                        <option value="daily">Every day</option>
+                        <option value="weekdays">Weekdays (Mon-Fri)</option>
+                        <option value="weekly">Every week</option>
+                        <option value="custom">Custom days</option>
+                    </select>
+                </div>
+                <div id="recurrence-days-picker" class="hidden">
+                    <label class="block text-xs font-bold text-secondary uppercase mb-2">Repeat on</label>
+                    <div class="flex gap-1.5 flex-wrap">
+                        <button type="button" data-day="0" onclick="toggleDay(this)" class="day-btn w-9 h-9 rounded-full text-xs font-bold border border-base bg-secondary text-secondary transition-all">Su</button>
+                        <button type="button" data-day="1" onclick="toggleDay(this)" class="day-btn w-9 h-9 rounded-full text-xs font-bold border border-base bg-secondary text-secondary transition-all">Mo</button>
+                        <button type="button" data-day="2" onclick="toggleDay(this)" class="day-btn w-9 h-9 rounded-full text-xs font-bold border border-base bg-secondary text-secondary transition-all">Tu</button>
+                        <button type="button" data-day="3" onclick="toggleDay(this)" class="day-btn w-9 h-9 rounded-full text-xs font-bold border border-base bg-secondary text-secondary transition-all">We</button>
+                        <button type="button" data-day="4" onclick="toggleDay(this)" class="day-btn w-9 h-9 rounded-full text-xs font-bold border border-base bg-secondary text-secondary transition-all">Th</button>
+                        <button type="button" data-day="5" onclick="toggleDay(this)" class="day-btn w-9 h-9 rounded-full text-xs font-bold border border-base bg-secondary text-secondary transition-all">Fr</button>
+                        <button type="button" data-day="6" onclick="toggleDay(this)" class="day-btn w-9 h-9 rounded-full text-xs font-bold border border-base bg-secondary text-secondary transition-all">Sa</button>
+                    </div>
+                </div>
+
+                <!-- Subtasks -->
+                <div>
+                    <label class="block text-xs font-bold text-secondary uppercase mb-2">Subtasks</label>
+                    <div id="subtask-list" class="space-y-2 mb-2"></div>
+                    <div class="flex gap-2">
+                        <input type="text" id="new-subtask-input" placeholder="Add a step..." class="flex-1 px-3 py-2 rounded-xl border border-base bg-secondary text-primary focus:ring-2 focus:ring-indigo-500 outline-none text-sm" onkeydown="if(event.key==='Enter'){event.preventDefault();addSubtask();}">
+                        <button type="button" onclick="addSubtask()" class="px-3 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 active:scale-95 transition-all">
+                            <i data-lucide="plus" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex gap-3 pt-2">
+                    <button type="button" onclick="closeModal()" class="flex-1 px-4 py-2.5 rounded-xl border border-base text-primary font-bold text-sm">Cancel</button>
+                    <button type="submit" id="modal-submit" class="flex-1 px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 shadow-md">Create</button>
+                </div>
+            </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Subtask Detail Modal -->
+    <div id="subtask-modal" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-50 p-4 backdrop-blur-sm">
+        <div class="bg-card rounded-2xl w-full max-w-sm shadow-2xl border border-base flex flex-col" style="max-height:85vh;">
+            <div class="flex justify-between items-center p-6 pb-4 border-b border-base flex-shrink-0">
+                <div>
+                    <h3 id="subtask-modal-title" class="text-lg font-bold text-primary">Task Steps</h3>
+                    <p id="subtask-modal-progress" class="text-xs text-secondary mt-0.5"></p>
+                </div>
+                <button onclick="closeSubtaskModal()" class="text-secondary hover:text-primary transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="overflow-y-auto flex-1 p-6">
+                <div id="subtask-detail-list" class="space-y-2"></div>
+                <div class="flex gap-2 mt-4">
+                    <input type="text" id="subtask-inline-input" placeholder="Add another step..." class="flex-1 px-3 py-2 rounded-xl border border-base bg-secondary text-primary focus:ring-2 focus:ring-indigo-500 outline-none text-sm" onkeydown="if(event.key==='Enter'){event.preventDefault();addSubtaskInline();}">
+                    <button onclick="addSubtaskInline()" class="px-3 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 active:scale-95 transition-all">
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Habit Modal -->
+    <div id="habit-modal" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-50 p-4 backdrop-blur-sm">
+        <div class="bg-card rounded-2xl w-full max-w-sm p-6 shadow-2xl border border-base">
+            <div class="flex justify-between items-center mb-6">
+                <h3 id="habit-modal-title" class="text-lg font-bold text-primary">New Habit</h3>
+                <button onclick="closeHabitModal()" class="text-secondary hover:text-primary transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            
+            <form id="habit-form" onsubmit="handleHabitSubmit(event)" class="space-y-4">
+                <input type="hidden" id="habit-id">
+                <div>
+                    <label class="block text-xs font-bold text-secondary uppercase mb-1">Habit Name</label>
+                    <input type="text" id="habit-title" required class="w-full px-4 py-2 rounded-xl border border-base bg-secondary text-primary focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="e.g. Drink Water">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-secondary uppercase mb-1">Daily Goal</label>
+                        <input type="number" id="habit-goal" required min="1" value="1" class="w-full px-4 py-2 rounded-xl border border-base bg-secondary text-primary focus:ring-2 focus:ring-indigo-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-secondary uppercase mb-1">Color</label>
+                        <input type="color" id="habit-color" value="#4f46e5" class="w-full h-11 p-1 rounded-xl border border-base bg-secondary outline-none cursor-pointer">
+                    </div>
+                </div>
+                <div class="flex gap-3 pt-4">
+                    <button type="button" onclick="closeHabitModal()" class="flex-1 px-4 py-2.5 rounded-xl border border-base text-primary font-bold text-sm">Cancel</button>
+                    <button type="submit" id="habit-modal-submit" class="flex-1 px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 shadow-md">Add Habit</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Habit History Modal -->
+    <div id="habit-history-modal" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-50 p-4 backdrop-blur-sm">
+        <div class="bg-card rounded-2xl w-full max-w-md p-6 shadow-2xl border border-base flex flex-col max-h-[90vh]">
+            <div class="flex justify-between items-center mb-4">
+                <div class="flex items-center gap-3">
+                    <div id="history-habit-icon" class="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold"></div>
+                    <h3 id="history-habit-title" class="text-lg font-bold text-primary">Habit History</h3>
+                </div>
+                <button onclick="closeHabitHistory()" class="text-secondary hover:text-primary transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            
+            <div class="flex justify-between items-center mb-4 bg-secondary p-2 rounded-xl">
+                <button onclick="changeHistoryMonth(-1)" class="p-1 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-colors"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
+                <h4 id="current-month-display" class="font-bold text-primary">Month Year</h4>
+                <button onclick="changeHistoryMonth(1)" class="p-1 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-colors"><i data-lucide="chevron-right" class="w-5 h-5"></i></button>
+            </div>
+
+            <div class="grid grid-cols-7 gap-1 text-center mb-2">
+                <div class="text-[10px] font-black text-secondary uppercase">Sun</div>
+                <div class="text-[10px] font-black text-secondary uppercase">Mon</div>
+                <div class="text-[10px] font-black text-secondary uppercase">Tue</div>
+                <div class="text-[10px] font-black text-secondary uppercase">Wed</div>
+                <div class="text-[10px] font-black text-secondary uppercase">Thu</div>
+                <div class="text-[10px] font-black text-secondary uppercase">Fri</div>
+                <div class="text-[10px] font-black text-secondary uppercase">Sat</div>
+            </div>
+
+            <div id="calendar-grid" class="grid grid-cols-7 gap-1 overflow-y-auto"></div>
+            
+            <div class="mt-6 flex items-center justify-between text-xs font-bold text-secondary border-t border-base pt-4">
+                <div class="flex items-center gap-2">
+                    <div class="w-3 h-3 rounded-sm bg-secondary"></div>
+                    <span>No Activity</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div id="partial-dot" class="w-3 h-3 rounded-sm opacity-40"></div>
+                    <span>Partial</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div id="complete-dot" class="w-3 h-3 rounded-sm"></div>
+                    <span>Goal Met</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let tasks = JSON.parse(localStorage.getItem('tasks')) || [
+            { id: 1, title: 'Check Emails', priority: 1, start: 8.5, end: 9, recurrence: 'weekdays', recurrenceDays: [], subtasks: [] },
+            { id: 2, title: 'Project Focus', priority: 1, start: 10, end: 12, recurrence: 'none', recurrenceDays: [], subtasks: [{id:1,text:'Research phase',done:false},{id:2,text:'Write outline',done:false},{id:3,text:'First draft',done:false}] },
+            { id: 3, title: 'Gym Session', priority: 2, start: 17, end: 18.5, recurrence: 'daily', recurrenceDays: [], subtasks: [] },
+            { id: 4, title: 'Learning', priority: 3, start: null, end: null, recurrence: 'none', recurrenceDays: [], subtasks: [] }
+        ];
+
+        // Temp subtasks being edited in modal
+        let modalSubtasks = [];
+        // Active task id for subtask detail modal
+        let activeSubtaskTaskId = null;
+
+        let habits = JSON.parse(localStorage.getItem('habits')) || [
+            { id: 1, title: 'Drink Water', goal: 8, color: '#3b82f6', logs: {} },
+            { id: 2, title: 'Read Book', goal: 1, color: '#10b981', logs: {} }
+        ];
+
+        let currentView = 'priority';
+        const START_HOUR = 6;
+        const END_HOUR = 22;
+        let hourWidth = 100;
+        let isDarkMode = localStorage.getItem('theme') === 'dark';
+
+        function init() {
+            // Migrate old tasks to new schema
+            tasks = tasks.map(t => ({
+                recurrence: 'none',
+                recurrenceDays: [],
+                subtasks: [],
+                ...t
+            }));
+            applyTheme();
+            renderTasks();
+            renderHabits();
+            switchView('priority');
+            lucide.createIcons();
+        }
+
+        function toggleDarkMode() {
+            isDarkMode = !isDarkMode;
+            localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
+            applyTheme();
+            renderTasks(); 
+            renderHabits();
+        }
+
+        function applyTheme() {
+            if (isDarkMode) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        }
+
+        function switchView(view) {
+            currentView = view;
+            const pView = document.getElementById('priority-view');
+            const tView = document.getElementById('timeline-view');
+            const hView = document.getElementById('habits-view');
+            
+            const pBtns = [document.getElementById('view-priority-desktop'), document.getElementById('view-priority-mobile')];
+            const tBtns = [document.getElementById('view-timeline-desktop'), document.getElementById('view-timeline-mobile')];
+            const hBtns = [document.getElementById('view-habits-desktop'), document.getElementById('view-habits-mobile')];
+
+            [pView, tView, hView].forEach(v => v?.classList.add('hidden'));
+            [...pBtns, ...tBtns, ...hBtns].forEach(b => b?.classList.remove('view-btn-active'));
+
+            if (view === 'priority') {
+                pView.classList.remove('hidden');
+                pBtns.forEach(b => b?.classList.add('view-btn-active'));
+            } else if (view === 'timeline') {
+                tView.classList.remove('hidden');
+                tBtns.forEach(b => b?.classList.add('view-btn-active'));
+                renderTimelineTasks();
+                renderTimelineGrid();
+            } else if (view === 'habits') {
+                hView.classList.remove('hidden');
+                hBtns.forEach(b => b?.classList.add('view-btn-active'));
+                renderHabits();
+            }
+        }
+
+        function handleZoom(val) {
+            hourWidth = parseInt(val);
+            document.getElementById('zoom-slider').value = val;
+            renderTimelineGrid();
+            renderTimelineTasks();
+        }
+
+        function changeZoom(delta) {
+            handleZoom(Math.min(Math.max(20, hourWidth + delta), 400));
+        }
+
+        function fitTimelineToScreen() {
+            const container = document.querySelector('.timeline-container');
+            const totalHours = END_HOUR - START_HOUR + 1;
+            const availableWidth = container.clientWidth - 48;
+            handleZoom(Math.floor(availableWidth / totalHours));
+        }
+
+        function renderTimelineGrid() {
+            const grid = document.getElementById('hour-markers');
+            const gridContainer = document.getElementById('timeline-grid');
+            const totalHours = END_HOUR - START_HOUR;
+            
+            gridContainer.style.width = `${(totalHours + 1) * hourWidth}px`;
+            grid.innerHTML = '';
+            
+            for (let h = START_HOUR; h <= END_HOUR; h++) {
+                const label = h > 12 ? `${h-12} PM` : (h === 12 ? '12 PM' : `${h} AM`);
+                let showLabel = true;
+                if (hourWidth < 40) showLabel = (h % 4 === 0);
+                else if (hourWidth < 70) showLabel = (h % 2 === 0);
+
+                grid.innerHTML += `
+                    <div class="relative border-l border-base h-full" style="width: ${hourWidth}px">
+                        ${showLabel ? `<span class="absolute -top-6 left-0 -translate-x-1/2 text-[9px] font-black text-secondary tracking-tighter whitespace-nowrap">${label}</span>` : ''}
+                    </div>
+                `;
+            }
+        }
+
+        function renderTasks() {
+            renderPriorityLists();
+            renderTimelineTasks(); // Always render to keep state in sync
+            updateCounts();
+            saveTasks();
+        }
+
+        function renderPriorityLists() {
+            [1, 2, 3].forEach(p => {
+                const list = document.getElementById(`list-p${p}`);
+                if (!list) return;
+                list.innerHTML = '';
+                
+                const filtered = tasks.filter(t => t.priority === p);
+                filtered.forEach(task => {
+                    const dotColor = p == 1 ? 'bg-rose-500' : p == 2 ? 'bg-amber-500' : 'bg-emerald-500';
+                    const timeStr = task.start !== null ? `${formatTime(task.start)} - ${formatTime(task.end)}` : 'Unscheduled';
+                    const recurLabel = getRecurrenceLabel(task);
+                    const subtasks = task.subtasks || [];
+                    const subtaskDone = subtasks.filter(s => s.done).length;
+                    const subtaskTotal = subtasks.length;
+                    const subtaskPct = subtaskTotal > 0 ? (subtaskDone / subtaskTotal) * 100 : 0;
+
+                    const card = document.createElement('div');
+                    card.className = 'priority-card group bg-card rounded-xl border border-base shadow-sm hover:border-indigo-400 transition-all cursor-grab active:cursor-grabbing';
+                    card.dataset.id = task.id;
+                    card.onpointerdown = (e) => startPriorityDrag(e, task.id);
+
+                    card.innerHTML = `
+                        <div class="p-3 flex items-start justify-between gap-2">
+                            <div class="flex items-start gap-3 pointer-events-none flex-1 min-w-0">
+                                <div class="w-2 h-2 rounded-full ${dotColor} mt-1.5 flex-shrink-0"></div>
+                                <div class="flex-1 min-w-0">
+                                    <h4 class="font-bold text-sm text-primary leading-tight">${task.title}</h4>
+                                    <div class="flex items-center gap-2 mt-1 flex-wrap">
+                                        <p class="text-[10px] font-bold text-secondary uppercase">${timeStr}</p>
+                                        ${recurLabel ? `<span class="recur-badge"><i data-lucide="repeat" style="width:9px;height:9px;display:inline-block;vertical-align:middle;margin-right:2px;"></i>${recurLabel}</span>` : ''}
+                                        ${subtaskTotal > 0 ? `<span class="text-[10px] font-bold text-secondary">${subtaskDone}/${subtaskTotal} steps</span>` : ''}
+                                    </div>
+                                    ${subtaskTotal > 0 ? `
+                                    <div class="subtask-progress-bar mt-1.5">
+                                        <div class="subtask-progress-fill" style="width:${subtaskPct}%"></div>
+                                    </div>` : ''}
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-0.5 flex-shrink-0 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                                ${subtaskTotal > 0 ? `<button onclick="openSubtaskModal(${task.id})" class="p-1.5 text-secondary hover:text-emerald-600"><i data-lucide="list-checks" class="w-4 h-4"></i></button>` : ''}
+                                <button onclick="openModal(${task.id})" class="p-1.5 text-secondary hover:text-indigo-600"><i data-lucide="edit-3" class="w-4 h-4"></i></button>
+                                <button onclick="deleteTask(${task.id})" class="p-1.5 text-secondary hover:text-rose-600"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                            </div>
+                        </div>
+                    `;
+                    list.appendChild(card);
+                });
+            });
+            lucide.createIcons();
+        }
+
+        let priorityDragInfo = null;
+
+        function startPriorityDrag(e, id) {
+            // Ignore button clicks
+            if (e.target.closest('button')) return;
+            e.preventDefault();
+            
+            const card = e.currentTarget;
+            const task = tasks.find(t => t.id === id);
+            if (!task) return;
+
+            const rect = card.getBoundingClientRect();
+            
+            priorityDragInfo = {
+                id: id,
+                element: card,
+                offsetX: e.clientX - rect.left,
+                offsetY: e.clientY - rect.top,
+                ghost: card.cloneNode(true)
+            };
+
+            priorityDragInfo.ghost.style.position = 'fixed';
+            priorityDragInfo.ghost.style.width = rect.width + 'px';
+            priorityDragInfo.ghost.style.height = rect.height + 'px';
+            priorityDragInfo.ghost.style.top = rect.top + 'px';
+            priorityDragInfo.ghost.style.left = rect.left + 'px';
+            priorityDragInfo.ghost.style.opacity = '0.9';
+            priorityDragInfo.ghost.style.pointerEvents = 'none';
+            priorityDragInfo.ghost.style.zIndex = '1000';
+            priorityDragInfo.ghost.style.transform = 'scale(1.02) rotate(2deg)';
+            priorityDragInfo.ghost.classList.add('shadow-2xl', 'border-indigo-500');
+            
+            document.body.appendChild(priorityDragInfo.ghost);
+            card.style.opacity = '0.3';
+
+            document.addEventListener('pointermove', movePriorityDrag);
+            document.addEventListener('pointerup', endPriorityDrag);
+            document.addEventListener('pointercancel', endPriorityDrag);
+        }
+
+        function movePriorityDrag(e) {
+            if (!priorityDragInfo) return;
+            
+            const ghost = priorityDragInfo.ghost;
+            ghost.style.top = (e.clientY - priorityDragInfo.offsetY) + 'px';
+            ghost.style.left = (e.clientX - priorityDragInfo.offsetX) + 'px';
+
+            // Auto-scroll logic for mobile
+            const mainEl = document.querySelector('main');
+            const buffer = 100;
+            if (e.clientY > window.innerHeight - buffer) {
+                mainEl.scrollBy(0, 12);
+            } else if (e.clientY < buffer + 60) {
+                mainEl.scrollBy(0, -12);
+            }
+
+            // Highlight drop targets
+            [1, 2, 3].forEach(p => {
+                const list = document.getElementById(`list-p${p}`);
+                const rect = list.getBoundingClientRect();
+                if (e.clientX >= rect.left - 20 && e.clientX <= rect.right + 20 &&
+                    e.clientY >= rect.top - 20 && e.clientY <= rect.bottom + 20) {
+                    list.classList.add('bg-indigo-50', 'dark:bg-indigo-900/30', 'border-indigo-400');
+                } else {
+                    list.classList.remove('bg-indigo-50', 'dark:bg-indigo-900/30', 'border-indigo-400');
+                }
+            });
+        }
+
+        function endPriorityDrag(e) {
+            if (!priorityDragInfo) return;
+
+            let newPriority = null;
+            [1, 2, 3].forEach(p => {
+                const list = document.getElementById(`list-p${p}`);
+                const rect = list.getBoundingClientRect();
+                if (e.clientX >= rect.left - 20 && e.clientX <= rect.right + 20 &&
+                    e.clientY >= rect.top - 20 && e.clientY <= rect.bottom + 20) {
+                    newPriority = p;
+                }
+                list.classList.remove('bg-indigo-50', 'dark:bg-indigo-900/30', 'border-indigo-400');
+            });
+
+            if (newPriority) {
+                const task = tasks.find(t => t.id === priorityDragInfo.id);
+                if (task && task.priority !== newPriority) {
+                    task.priority = newPriority;
+                    saveTasks();
+                }
+            }
+
+            priorityDragInfo.ghost.remove();
+            priorityDragInfo.element.style.opacity = '1';
+            priorityDragInfo = null;
+
+            document.removeEventListener('pointermove', movePriorityDrag);
+            document.removeEventListener('pointerup', endPriorityDrag);
+            document.removeEventListener('pointercancel', endPriorityDrag);
+
+            renderTasks();
+        }
+
+        function renderTimelineTasks() {
+            const container = document.getElementById('timeline-tasks');
+            const unscheduledArea = document.getElementById('unscheduled-area');
+            if (!container || !unscheduledArea) return;
+            
+            container.innerHTML = '';
+            unscheduledArea.innerHTML = '';
+
+            const scheduled = tasks.filter(t => t.start !== null && t.end !== null).sort((a,b) => a.start - b.start);
+            const unscheduled = tasks.filter(t => t.start === null || t.end === null);
+
+            // Hide/Show Unscheduled logic
+            if (unscheduled.length === 0) {
+                unscheduledArea.style.display = 'none';
+            } else {
+                unscheduledArea.style.display = 'flex';
+                unscheduled.forEach(task => {
+                    const chip = document.createElement('div');
+                    chip.className = 'unscheduled-chip';
+                    chip.onpointerdown = (e) => startTimelineDragFromUnscheduled(e, task.id);
+                    chip.innerHTML = `
+                        <div class="w-1.5 h-1.5 rounded-full ${task.priority == 1 ? 'bg-rose-500' : task.priority == 2 ? 'bg-amber-500' : 'bg-emerald-500'}"></div>
+                        <span class="font-bold" style="color: var(--task-text)">${task.title}</span>
+                    `;
+                    chip.onclick = (e) => { if (!e.defaultPrevented) openModal(task.id); };
+                    unscheduledArea.appendChild(chip);
+                });
+            }
+
+            scheduled.forEach((task, index) => {
+                const color = task.priority == 1 ? 'bg-rose-500' : task.priority == 2 ? 'bg-amber-500' : 'bg-emerald-500';
+                const left = (task.start - START_HOUR) * hourWidth;
+                const width = (task.end - task.start) * hourWidth;
+                
+                const block = document.createElement('div');
+                block.className = `task-block absolute h-12 md:h-14 rounded-xl ${color} p-2 shadow-lg flex flex-col justify-center group touch-none`;
+                block.style.left = `${left}px`;
+                block.style.width = `${width}px`;
+                block.style.top = `0px`; // Aligned in one line
+                
+                block.innerHTML = `
+                    <div class="relative w-full h-full pointer-events-none">
+                        <div class="flex flex-col justify-center h-full pr-4">
+                            <span class="text-[10px] md:text-xs font-black leading-tight whitespace-nowrap overflow-visible drop-shadow-sm !text-black dark:!text-white">
+                                ${task.title}
+                            </span>
+                            ${width > 60 ? `<span class="text-[8px] font-bold mt-0.5 !text-black/80 dark:!text-white/80">${formatTime(task.start)} - ${formatTime(task.end)}</span>` : ''}
+                        </div>
+                        <div class="resize-handle pointer-events-auto" onpointerdown="startResize(event, ${task.id})"></div>
+                    </div>
+                `;
+
+                block.onpointerdown = (e) => {
+                    if (e.target.classList.contains('resize-handle')) return;
+                    startDrag(e, task.id);
+                };
+                block.onclick = (e) => {
+                    if (e.pointerType === 'touch' || width < 40) openModal(task.id);
+                };
+                container.appendChild(block);
+            });
+        }
+
+        function startTimelineDragFromUnscheduled(e, taskId) {
+            e.preventDefault(); // Stop native drag/scroll
+            const task = tasks.find(t => t.id === taskId);
+            if (!task) return;
+            
+            const el = e.currentTarget;
+            el.setPointerCapture(e.pointerId);
+            
+            let isDragging = false;
+
+            const ghost = el.cloneNode(true);
+            ghost.style.position = 'fixed';
+            ghost.style.pointerEvents = 'none';
+            ghost.style.zIndex = '1000';
+            ghost.style.opacity = '0.8';
+            ghost.style.top = (e.clientY - 15) + 'px';
+            ghost.style.left = (e.clientX - 30) + 'px';
+
+            const onMove = (me) => {
+                if (me.pointerId !== e.pointerId) return;
+                if (!isDragging && (Math.abs(me.clientX - e.clientX) > 5 || Math.abs(me.clientY - e.clientY) > 5)) {
+                    isDragging = true;
+                    document.body.appendChild(ghost);
+                }
+                if (isDragging) {
+                    ghost.style.top = (me.clientY - 15) + 'px';
+                    ghost.style.left = (me.clientX - 30) + 'px';
+                }
+            };
+
+            const cleanup = (ue) => {
+                if (ue && ue.pointerId !== e.pointerId) return;
+                if (isDragging) ghost.remove();
+                try { el.releasePointerCapture(e.pointerId); } catch(err) {}
+                el.removeEventListener('pointermove', onMove);
+                el.removeEventListener('pointerup', onUp);
+                el.removeEventListener('pointercancel', onCancel);
+            };
+
+            const onUp = (ue) => {
+                if (ue.pointerId !== e.pointerId) return;
+                if (isDragging) {
+                    const grid = document.getElementById('timeline-grid');
+                    const gridRect = grid.getBoundingClientRect();
+                    
+                    if (ue.clientX > gridRect.left && ue.clientX < gridRect.right && ue.clientY > gridRect.top && ue.clientY < gridRect.bottom) {
+                        const x = ue.clientX - gridRect.left;
+                        let start = x / hourWidth + START_HOUR;
+                        task.start = Math.round(start * 4) / 4; 
+                        if (task.start < START_HOUR) task.start = START_HOUR;
+                        if (task.start > END_HOUR - 0.5) task.start = END_HOUR - 0.5;
+                        task.end = task.start + 1;
+                        renderTasks();
+                    }
+                } else {
+                    openModal(task.id);
+                }
+                cleanup(ue);
+            };
+
+            const onCancel = (ce) => {
+                cleanup(ce);
+            };
+
+            el.addEventListener('pointermove', onMove);
+            el.addEventListener('pointerup', onUp);
+            el.addEventListener('pointercancel', onCancel);
+        }
+
+        function openModal(taskId = null) {
+            const modal = document.getElementById('task-modal');
+            const form = document.getElementById('task-form');
+            const idInput = document.getElementById('task-id');
+            const titleInput = document.getElementById('task-title');
+            const priorityInput = document.getElementById('task-priority');
+            const startInput = document.getElementById('task-start');
+            const endInput = document.getElementById('task-end');
+
+            // Reset day buttons
+            document.querySelectorAll('.day-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('recurrence-days-picker').classList.add('hidden');
+
+            if (taskId) {
+                const task = tasks.find(t => t.id === taskId);
+                document.getElementById('modal-title').innerText = 'Edit Task';
+                document.getElementById('modal-submit').innerText = 'Save';
+                idInput.value = task.id;
+                titleInput.value = task.title;
+                priorityInput.value = task.priority;
+                startInput.value = decimalToTimeString(task.start);
+                endInput.value = decimalToTimeString(task.end);
+
+                // Recurrence
+                const recur = task.recurrence || 'none';
+                document.getElementById('task-recurrence').value = recur;
+                if (recur === 'custom') {
+                    document.getElementById('recurrence-days-picker').classList.remove('hidden');
+                    (task.recurrenceDays || []).forEach(d => {
+                        const btn = document.querySelector(`.day-btn[data-day="${d}"]`);
+                        if (btn) btn.classList.add('active');
+                    });
+                }
+
+                // Subtasks
+                modalSubtasks = JSON.parse(JSON.stringify(task.subtasks || []));
+            } else {
+                document.getElementById('modal-title').innerText = 'New Task';
+                document.getElementById('modal-submit').innerText = 'Create';
+                idInput.value = '';
+                form.reset();
+                document.getElementById('task-recurrence').value = 'none';
+                modalSubtasks = [];
+            }
+            renderModalSubtasks();
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            lucide.createIcons();
+        }
+
+        function closeModal() {
+            document.getElementById('task-modal').classList.add('hidden');
+            document.getElementById('task-modal').classList.remove('flex');
+        }
+
+        // --- Recurrence helpers ---
+        function toggleRecurrenceDays() {
+            const val = document.getElementById('task-recurrence').value;
+            const picker = document.getElementById('recurrence-days-picker');
+            if (val === 'custom') {
+                picker.classList.remove('hidden');
+            } else {
+                picker.classList.add('hidden');
+            }
+        }
+
+        function toggleDay(btn) {
+            btn.classList.toggle('active');
+        }
+
+        function getRecurrenceLabel(task) {
+            if (!task.recurrence || task.recurrence === 'none') return null;
+            const labels = { daily: 'Daily', weekdays: 'Weekdays', weekly: 'Weekly', custom: 'Custom' };
+            return labels[task.recurrence] || null;
+        }
+
+        // --- Subtask helpers (modal) ---
+        function renderModalSubtasks() {
+            const list = document.getElementById('subtask-list');
+            if (!list) return;
+            list.innerHTML = '';
+            modalSubtasks.forEach((st, i) => {
+                const row = document.createElement('div');
+                row.className = 'flex items-center gap-2 bg-secondary/50 rounded-xl px-3 py-2 border border-base';
+                row.innerHTML = `
+                    <input type="checkbox" ${st.done ? 'checked' : ''} onchange="modalSubtasks[${i}].done=this.checked;renderModalSubtasks();" class="w-4 h-4 accent-indigo-600 cursor-pointer flex-shrink-0">
+                    <span class="flex-1 text-sm text-primary ${st.done ? 'line-through opacity-40' : ''}">${st.text}</span>
+                    <button type="button" onclick="removeModalSubtask(${i})" class="text-secondary hover:text-rose-500 transition-colors flex-shrink-0">
+                        <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                    </button>
+                `;
+                list.appendChild(row);
+            });
+            lucide.createIcons();
+        }
+
+        function addSubtask() {
+            const input = document.getElementById('new-subtask-input');
+            const text = input.value.trim();
+            if (!text) return;
+            modalSubtasks.push({ id: Date.now(), text, done: false });
+            input.value = '';
+            renderModalSubtasks();
+        }
+
+        function removeModalSubtask(index) {
+            modalSubtasks.splice(index, 1);
+            renderModalSubtasks();
+        }
+
+        function handleTaskSubmit(e) {
+            e.preventDefault();
+            const id = document.getElementById('task-id').value;
+            const title = document.getElementById('task-title').value;
+            const priority = parseInt(document.getElementById('task-priority').value);
+            const startVal = document.getElementById('task-start').value;
+            const endVal = document.getElementById('task-end').value;
+            const recurrence = document.getElementById('task-recurrence').value;
+            const recurrenceDays = recurrence === 'custom'
+                ? [...document.querySelectorAll('.day-btn.active')].map(b => parseInt(b.dataset.day))
+                : [];
+
+            const start = startVal ? timeStringToDecimal(startVal) : null;
+            const end = endVal ? timeStringToDecimal(endVal) : null;
+
+            if (start !== null && end !== null && end <= start) {
+                alert("End must be after start"); return;
+            }
+
+            if (id) {
+                const idx = tasks.findIndex(t => t.id == id);
+                tasks[idx] = { ...tasks[idx], title, priority, start, end, recurrence, recurrenceDays, subtasks: modalSubtasks };
+            } else {
+                tasks.push({ id: Date.now(), title, priority, start, end, recurrence, recurrenceDays, subtasks: modalSubtasks });
+            }
+            renderTasks();
+            closeModal();
+        }
+
+        // --- Subtask detail modal (from card) ---
+        function openSubtaskModal(taskId) {
+            activeSubtaskTaskId = taskId;
+            const task = tasks.find(t => t.id === taskId);
+            document.getElementById('subtask-modal-title').innerText = task.title;
+            renderSubtaskDetailList();
+            document.getElementById('subtask-modal').classList.remove('hidden');
+            document.getElementById('subtask-modal').classList.add('flex');
+            lucide.createIcons();
+        }
+
+        function closeSubtaskModal() {
+            document.getElementById('subtask-modal').classList.add('hidden');
+            document.getElementById('subtask-modal').classList.remove('flex');
+            activeSubtaskTaskId = null;
+            renderTasks();
+        }
+
+        function renderSubtaskDetailList() {
+            const task = tasks.find(t => t.id === activeSubtaskTaskId);
+            if (!task) return;
+            const done = task.subtasks.filter(s => s.done).length;
+            document.getElementById('subtask-modal-progress').innerText = `${done} of ${task.subtasks.length} steps done`;
+            const list = document.getElementById('subtask-detail-list');
+            list.innerHTML = '';
+            task.subtasks.forEach((st, i) => {
+                const row = document.createElement('div');
+                row.className = 'flex items-center gap-3 bg-secondary/50 rounded-xl px-4 py-3 border border-base transition-all';
+                row.innerHTML = `
+                    <button type="button" onclick="toggleSubtaskDone(${i})" class="flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${st.done ? 'bg-indigo-600 border-indigo-600' : 'border-base hover:border-indigo-400'}">
+                        ${st.done ? '<i data-lucide="check" class="w-3 h-3 text-white"></i>' : ''}
+                    </button>
+                    <span class="flex-1 text-sm font-medium text-primary ${st.done ? 'line-through opacity-40' : ''}">${st.text}</span>
+                    <button type="button" onclick="deleteSubtask(${i})" class="text-secondary hover:text-rose-500 transition-colors">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                `;
+                list.appendChild(row);
+            });
+            lucide.createIcons();
+        }
+
+        function toggleSubtaskDone(index) {
+            const task = tasks.find(t => t.id === activeSubtaskTaskId);
+            task.subtasks[index].done = !task.subtasks[index].done;
+            saveTasks();
+            renderSubtaskDetailList();
+        }
+
+        function deleteSubtask(index) {
+            const task = tasks.find(t => t.id === activeSubtaskTaskId);
+            task.subtasks.splice(index, 1);
+            saveTasks();
+            renderSubtaskDetailList();
+        }
+
+        function addSubtaskInline() {
+            const input = document.getElementById('subtask-inline-input');
+            const text = input.value.trim();
+            if (!text) return;
+            const task = tasks.find(t => t.id === activeSubtaskTaskId);
+            task.subtasks.push({ id: Date.now(), text, done: false });
+            input.value = '';
+            saveTasks();
+            renderSubtaskDetailList();
+        }
+
+        function deleteTask(id) { tasks = tasks.filter(t => t.id !== id); renderTasks(); }
+        function saveTasks() { localStorage.setItem('tasks', JSON.stringify(tasks)); }
+        function updateCounts() { [1,2,3].forEach(p => { 
+            const count = tasks.filter(t => t.priority === p).length;
+            const el = document.getElementById(`count-p${p}`);
+            if (el) el.innerText = count;
+        }); }
+
+        let activeAction = null;
+        function startDrag(e, id) {
+            e.preventDefault();
+            const task = tasks.find(t => t.id === id);
+            const el = e.currentTarget;
+            el.setPointerCapture(e.pointerId);
+            activeAction = { type: 'drag', id, startX: e.clientX, initStart: task.start, initEnd: task.end, pointerId: e.pointerId, element: el };
+            document.addEventListener('pointermove', handleMove);
+            document.addEventListener('pointerup', endMove);
+            document.addEventListener('pointercancel', endMove);
+        }
+
+        function startResize(e, id) {
+            e.preventDefault(); 
+            e.stopPropagation();
+            const task = tasks.find(t => t.id === id);
+            const el = e.currentTarget;
+            el.setPointerCapture(e.pointerId);
+            activeAction = { type: 'resize', id, startX: e.clientX, initEnd: task.end, pointerId: e.pointerId, element: el };
+            document.addEventListener('pointermove', handleMove);
+            document.addEventListener('pointerup', endMove);
+            document.addEventListener('pointercancel', endMove);
+        }
+
+        function handleMove(e) {
+            if (!activeAction || e.pointerId !== activeAction.pointerId) return;
+            const delta = (e.clientX - activeAction.startX) / hourWidth;
+            const snappedDelta = Math.round(delta * 4) / 4;
+            const task = tasks.find(t => t.id === activeAction.id);
+
+            if (activeAction.type === 'drag') {
+                const dur = activeAction.initEnd - activeAction.initStart;
+                let s = activeAction.initStart + snappedDelta;
+                if (s < START_HOUR) s = START_HOUR;
+                if (s + dur > END_HOUR) s = END_HOUR - dur;
+                task.start = s; task.end = s + dur;
+            } else {
+                let end = activeAction.initEnd + snappedDelta;
+                if (end < task.start + 0.25) end = task.start + 0.25;
+                if (end > END_HOUR) end = END_HOUR;
+                task.end = end;
+            }
+            renderTimelineTasks();
+        }
+
+        function endMove(e) {
+            if (activeAction && activeAction.element && e.pointerId === activeAction.pointerId) {
+                try { activeAction.element.releasePointerCapture(e.pointerId); } catch(err) {}
+            }
+            activeAction = null;
+            document.removeEventListener('pointermove', handleMove);
+            document.removeEventListener('pointerup', endMove);
+            document.removeEventListener('pointercancel', endMove);
+            saveTasks();
+            renderPriorityLists();
+        }
+
+        function formatTime(decimal) {
+            if (decimal === null) return '';
+            const h = Math.floor(decimal);
+            const m = Math.round((decimal - h) * 60);
+            const period = h >= 12 ? 'PM' : 'AM';
+            const displayH = h % 12 || 12;
+            return `${displayH}:${m.toString().padStart(2, '0')} ${period}`;
+        }
+
+        function timeStringToDecimal(str) {
+            const [h, m] = str.split(':').map(Number);
+            return h + m / 60;
+        }
+
+        function decimalToTimeString(decimal) {
+            if (decimal === null) return "";
+            const h = Math.floor(decimal);
+            const m = Math.round((decimal - h) * 60);
+            return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+        }
+
+        // Habit functions
+        let historyMonth = new Date().getMonth();
+        let historyYear = new Date().getFullYear();
+        let activeHistoryHabitId = null;
+
+        function getStreak(habit) {
+            let streak = 0;
+            const d = new Date();
+            while (true) {
+                const key = d.toISOString().split('T')[0];
+                const logs = habit.logs[key] || [];
+                if (logs.length >= habit.goal) {
+                    streak++;
+                    d.setDate(d.getDate() - 1);
+                } else {
+                    break;
+                }
+            }
+            return streak;
+        }
+
+        function getLast7Days() {
+            const days = [];
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date();
+                d.setDate(d.getDate() - i);
+                days.push({
+                    key: d.toISOString().split('T')[0],
+                    label: ['S','M','T','W','T','F','S'][d.getDay()],
+                    isToday: i === 0
+                });
+            }
+            return days;
+        }
+
+        function renderHabits() {
+            const list = document.getElementById('habits-list');
+            const emptyState = document.getElementById('habits-empty-state');
+            const today = new Date().toISOString().split('T')[0];
+
+            list.innerHTML = '';
+
+            if (habits.length === 0) {
+                emptyState.classList.remove('hidden');
+                emptyState.classList.add('flex');
+                document.getElementById('habits-summary').innerText = '';
+                return;
+            }
+            emptyState.classList.add('hidden');
+            emptyState.classList.remove('flex');
+
+            const doneCount = habits.filter(h => (h.logs[today] || []).length >= h.goal).length;
+            document.getElementById('habits-summary').innerText =
+                doneCount === habits.length
+                    ? '🎉 All habits done today!'
+                    : `${doneCount} of ${habits.length} done today`;
+
+            const last7 = getLast7Days();
+            const R = 28; // ring radius
+            const C = 2 * Math.PI * R; // circumference
+
+            habits.forEach(habit => {
+                const logs = habit.logs[today] || [];
+                const count = logs.length;
+                const isDone = count >= habit.goal;
+                const progress = Math.min(count / habit.goal, 1);
+                const streak = getStreak(habit);
+                const dashOffset = C - progress * C;
+
+                const card = document.createElement('div');
+                card.className = 'habit-card';
+
+                card.innerHTML = `
+                    <div class="p-4 flex items-center gap-4">
+
+                        <!-- Big tap button with ring -->
+                        <button onclick="logHabit(${habit.id})" class="habit-log-btn ${isDone ? 'done' : ''} relative flex-shrink-0"
+                            style="background-color: ${isDone ? habit.color : 'var(--bg-secondary)'}; ${!isDone ? 'box-shadow:none;border:2px dashed var(--border-color);' : ''}">
+                            <!-- SVG ring overlay -->
+                            <svg width="60" height="60" style="position:absolute;top:0;left:0;pointer-events:none;">
+                                <circle class="habit-ring-bg" cx="30" cy="30" r="${R}"/>
+                                <circle class="habit-ring-fill"
+                                    cx="30" cy="30" r="${R}"
+                                    stroke="${habit.color}"
+                                    stroke-dasharray="${C}"
+                                    stroke-dashoffset="${isDone ? 0 : dashOffset}"
+                                    style="transform-origin:30px 30px;"/>
+                            </svg>
+                            ${isDone
+                                ? `<span style="font-size:1.5rem;position:relative;z-index:1;">✓</span>`
+                                : `<span style="font-size:0.7rem;font-weight:900;color:${habit.color};position:relative;z-index:1;line-height:1;">${count}<br><span style="font-size:0.55rem;opacity:0.7">/${habit.goal}</span></span>`
+                            }
+                        </button>
+
+                        <!-- Info -->
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between gap-2">
+                                <h4 class="font-extrabold text-primary text-base truncate">${habit.title}</h4>
+                                <div class="flex items-center gap-1 flex-shrink-0">
+                                    <button onclick="showHabitHistory(${habit.id})" class="p-1.5 text-secondary hover:text-indigo-500 transition-colors rounded-lg bg-secondary/60"><i data-lucide="calendar" class="w-3.5 h-3.5"></i></button>
+                                    <button onclick="openHabitModal(${habit.id})" class="p-1.5 text-secondary hover:text-amber-500 transition-colors rounded-lg bg-secondary/60"><i data-lucide="settings" class="w-3.5 h-3.5"></i></button>
+                                    <button onclick="deleteHabit(${habit.id})" class="p-1.5 text-secondary hover:text-rose-500 transition-colors rounded-lg bg-secondary/60"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                                </div>
+                            </div>
+
+                            <!-- Streak + goal -->
+                            <div class="flex items-center gap-3 mt-0.5">
+                                ${streak > 0 ? `<span class="text-[11px] font-black" style="color:${habit.color}">🔥 ${streak} day streak</span>` : ''}
+                                <span class="text-[11px] font-bold text-secondary">${isDone ? '✓ Goal met!' : `${count}/${habit.goal} today`}</span>
+                            </div>
+
+                            <!-- Last 7 days dots -->
+                            <div class="flex items-center gap-1 mt-2.5">
+                                ${last7.map(d => {
+                                    const dc = (habit.logs[d.key] || []).length;
+                                    const met = dc >= habit.goal;
+                                    const partial = dc > 0 && !met;
+                                    let bg, textCol;
+                                    if (met)          { bg = habit.color;       textCol = '#fff'; }
+                                    else if (partial) { bg = habit.color + '55'; textCol = habit.color; }
+                                    else              { bg = 'var(--bg-secondary)'; textCol = 'var(--text-secondary)'; }
+                                    return `<div class="week-dot ${d.isToday ? 'today-dot' : ''}" style="background:${bg};color:${textCol};">${d.label}</div>`;
+                                }).join('')}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Thin bottom progress bar -->
+                    <div style="height:3px;background:var(--border-color);">
+                        <div style="height:100%;width:${Math.round(progress*100)}%;background:${habit.color};transition:width 0.5s ease;border-radius:0 0 20px 20px;"></div>
+                    </div>
+                `;
+                list.appendChild(card);
+            });
+
+            lucide.createIcons();
+            saveHabits();
+        }
+
+        function logHabit(id) {
+            const today = new Date().toISOString().split('T')[0];
+            const habit = habits.find(h => h.id === id);
+            if (!habit.logs[today]) habit.logs[today] = [];
+            habit.logs[today].push(new Date().getTime());
+            renderHabits();
+        }
+
+        function showHabitHistory(id) {
+            activeHistoryHabitId = id;
+            const habit = habits.find(h => h.id === id);
+            const modal = document.getElementById('habit-history-modal');
+            const icon = document.getElementById('history-habit-icon');
+            const title = document.getElementById('history-habit-title');
+            
+            icon.style.backgroundColor = habit.color;
+            icon.innerText = habit.title.charAt(0).toUpperCase();
+            title.innerText = `${habit.title} History`;
+            
+            document.getElementById('partial-dot').style.backgroundColor = habit.color;
+            document.getElementById('complete-dot').style.backgroundColor = habit.color;
+
+            renderCalendar();
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            lucide.createIcons();
+        }
+
+        function closeHabitHistory() {
+            document.getElementById('habit-history-modal').classList.add('hidden');
+            document.getElementById('habit-history-modal').classList.remove('flex');
+        }
+
+        function changeHistoryMonth(delta) {
+            historyMonth += delta;
+            if (historyMonth > 11) { historyMonth = 0; historyYear++; }
+            if (historyMonth < 0) { historyMonth = 11; historyYear--; }
+            renderCalendar();
+        }
+
+        function renderCalendar() {
+            const grid = document.getElementById('calendar-grid');
+            const monthDisplay = document.getElementById('current-month-display');
+            const habit = habits.find(h => h.id === activeHistoryHabitId);
+            
+            grid.innerHTML = '';
+            const firstDay = new Date(historyYear, historyMonth, 1).getDay();
+            const daysInMonth = new Date(historyYear, historyMonth + 1, 0).getDate();
+            const monthName = new Intl.DateTimeFormat('en-US', { month: 'long' }).format(new Date(historyYear, historyMonth));
+            
+            monthDisplay.innerText = `${monthName} ${historyYear}`;
+
+            // Padding for first day of week
+            for (let i = 0; i < firstDay; i++) {
+                const empty = document.createElement('div');
+                grid.appendChild(empty);
+            }
+
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dateStr = `${historyYear}-${(historyMonth + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+                const logs = habit.logs[dateStr] || [];
+                const count = logs.length;
+                const isGoalMet = count >= habit.goal;
+                const hasActivity = count > 0;
+                
+                const dayEl = document.createElement('div');
+                dayEl.className = `h-10 w-full rounded-lg flex items-center justify-center text-xs font-bold relative transition-all`;
+                
+                if (isGoalMet) {
+                    dayEl.style.backgroundColor = habit.color;
+                    dayEl.classList.add('text-white', 'shadow-sm');
+                } else if (hasActivity) {
+                    dayEl.style.backgroundColor = habit.color;
+                    dayEl.classList.add('opacity-40', 'text-white');
+                } else {
+                    dayEl.classList.add('bg-secondary', 'text-secondary', 'opacity-30');
+                }
+
+                dayEl.innerText = day;
+                grid.appendChild(dayEl);
+            }
+        }
+
+        function openHabitModal(id = null) {
+            const modal = document.getElementById('habit-modal');
+            const form = document.getElementById('habit-form');
+            const idInput = document.getElementById('habit-id');
+            const titleInput = document.getElementById('habit-title');
+            const goalInput = document.getElementById('habit-goal');
+            const colorInput = document.getElementById('habit-color');
+            
+            if (id) {
+                const habit = habits.find(h => h.id === id);
+                document.getElementById('habit-modal-title').innerText = 'Edit Habit';
+                document.getElementById('habit-modal-submit').innerText = 'Save Changes';
+                idInput.value = habit.id;
+                titleInput.value = habit.title;
+                goalInput.value = habit.goal;
+                colorInput.value = habit.color;
+            } else {
+                document.getElementById('habit-modal-title').innerText = 'New Habit';
+                document.getElementById('habit-modal-submit').innerText = 'Add Habit';
+                idInput.value = '';
+                form.reset();
+                colorInput.value = '#4f46e5';
+            }
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            lucide.createIcons();
+        }
+
+        function closeHabitModal() {
+            document.getElementById('habit-modal').classList.add('hidden');
+            document.getElementById('habit-modal').classList.remove('flex');
+        }
+
+        function handleHabitSubmit(e) {
+            e.preventDefault();
+            const id = document.getElementById('habit-id').value;
+            const title = document.getElementById('habit-title').value;
+            const goal = parseInt(document.getElementById('habit-goal').value);
+            const color = document.getElementById('habit-color').value;
+
+            if (id) {
+                const idx = habits.findIndex(h => h.id == id);
+                habits[idx] = { ...habits[idx], title, goal, color };
+            } else {
+                habits.push({ id: Date.now(), title, goal, color, logs: {} });
+            }
+            saveHabits();
+            renderHabits();
+            closeHabitModal();
+        }
+
+        function deleteHabit(id) {
+            habits = habits.filter(h => h.id !== id);
+            saveHabits();
+            renderHabits();
+        }
+
+        function saveHabits() {
+            localStorage.setItem('habits', JSON.stringify(habits));
+        }
+
+        function exportData() {
+            const data = {
+                tasks: tasks,
+                habits: habits,
+                theme: isDarkMode ? 'dark' : 'light',
+                exportDate: new Date().toISOString()
+            };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `taskflow-export-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
