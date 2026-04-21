@@ -4,7 +4,7 @@
 
 ---
 
-## 🚀 Deploy to GitHub & Build APK in 5 Steps
+## 🚀 Deploy to GitHub & Build APK in 5 Steps.
 
 ### Step 1 — Create a GitHub Repository
 
