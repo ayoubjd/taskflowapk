@@ -6,6 +6,16 @@
     <title>TaskFlow - Priority & Time Block</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Capacitor bridge: available when running as APK, safely ignored in browser -->
+    <script>
+        function initCapFS() {
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem) {
+                window.CapFS = window.Capacitor.Plugins.Filesystem;
+            }
+        }
+        document.addEventListener('deviceready', initCapFS);
+        window.addEventListener('load', initCapFS);
+    </script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         
@@ -1593,22 +1603,63 @@
             localStorage.setItem('habits', JSON.stringify(habits));
         }
 
-        function exportData() {
+        async function exportData() {
             const data = {
                 tasks: tasks,
                 habits: habits,
                 theme: isDarkMode ? 'dark' : 'light',
                 exportDate: new Date().toISOString()
             };
-            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `taskflow-export-${new Date().toISOString().split('T')[0]}.json`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            const jsonString = JSON.stringify(data, null, 2);
+            const fileName = `taskflow-export-${new Date().toISOString().split('T')[0]}.json`;
+
+            // Running inside Capacitor APK?
+            const isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+
+            if (isNative) {
+                // Re-check bridge in case it loaded after page init
+                if (!window.CapFS && window.Capacitor && window.Capacitor.Plugins) {
+                    window.CapFS = window.Capacitor.Plugins.Filesystem;
+                }
+                if (!window.CapFS) {
+                    alert('Export not available — Filesystem plugin not loaded.');
+                    return;
+                }
+                try {
+                    // Android 10+ (API 29+): use app-specific external files dir (no permission needed)
+                    await window.CapFS.writeFile({
+                        path: fileName,
+                        data: jsonString,
+                        directory: 'DOCUMENTS',
+                        encoding: 'utf8'
+                    });
+                    alert('✅ Exported!\n\nSaved to Documents folder:\n' + fileName);
+                } catch (e1) {
+                    try {
+                        // Fallback: internal app data directory (always writable)
+                        await window.CapFS.writeFile({
+                            path: fileName,
+                            data: jsonString,
+                            directory: 'DATA',
+                            encoding: 'utf8'
+                        });
+                        alert('✅ Exported!\n\nSaved to app data folder:\n' + fileName);
+                    } catch (e2) {
+                        alert('❌ Export failed: ' + e2.message);
+                    }
+                }
+            } else {
+                // Browser: use classic download method
+                const blob = new Blob([jsonString], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
         }
 
         window.onload = init;
